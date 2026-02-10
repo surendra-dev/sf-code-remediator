@@ -1,0 +1,3 @@
+# Salesforce Apex Static Analysis Tool
+# No external dependencies required
+# Uses Python 3.7+ standard library only
