@@ -1,0 +1,9 @@
+node_modules/
+reports/
+*.backup
+.DS_Store
+*.log
+.vscode/
+.idea/
+dist/
+
