@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { dirname, join, resolve } from 'path';
+import { existsSync, readFileSync } from 'fs';
 import { ApexScanner } from './scanner/apexScanner.js';
 import { ApexFixer } from './fixer/apexFixer.js';
 import { Verifier } from './verifier/verifier.js';
@@ -101,10 +102,65 @@ class SalesforceAnalyzer {
   }
 }
 
+/**
+ * Resolves the target path for Salesforce metadata analysis.
+ * Priority order:
+ * 1. Command-line argument (--path <path>)
+ * 2. Config file (sf-remediator.config.json)
+ * 3. Default fallback (current working directory)
+ * 
+ * @param {string[]} args - Command-line arguments
+ * @returns {string} Resolved absolute path to the target directory
+ */
+function resolveTargetPath(args) {
+  // Priority 1: Command-line argument --path
+  const pathIndex = args.indexOf('--path');
+  if (pathIndex !== -1 && args[pathIndex + 1]) {
+    const cliPath = args[pathIndex + 1];
+    const resolvedPath = resolve(cliPath);
+    if (existsSync(resolvedPath)) {
+      console.log(`Using target path from CLI argument: ${resolvedPath}`);
+      return resolvedPath;
+    } else {
+      console.error(`Error: CLI argument path does not exist: ${resolvedPath}`);
+      process.exit(1);
+    }
+  }
+
+  // Priority 2: Config file
+  const configPath = join(process.cwd(), 'sf-remediator.config.json');
+  if (existsSync(configPath)) {
+    try {
+      const configContent = readFileSync(configPath, 'utf-8');
+      const config = JSON.parse(configContent);
+      
+      if (config.targetPath) {
+        const resolvedPath = resolve(process.cwd(), config.targetPath);
+        if (existsSync(resolvedPath)) {
+          console.log(`Using target path from config file: ${resolvedPath}`);
+          return resolvedPath;
+        } else {
+          console.error(`Error: Config file path does not exist: ${resolvedPath}`);
+          console.error(`  Config path: ${configPath}`);
+          console.error(`  Specified targetPath: ${config.targetPath}`);
+          console.error(`  Resolved to: ${resolvedPath}`);
+          process.exit(1);
+        }
+      }
+    } catch (error) {
+      console.error(`Error reading config file: ${error.message}`);
+      process.exit(1);
+    }
+  }
+
+  // Priority 3: Default fallback
+  return process.cwd();
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
   const analyzer = new SalesforceAnalyzer({
-    targetPath: process.cwd(),
+    targetPath: resolveTargetPath(args),
     autoFix: args.includes('--autoFix') || args.includes('--fix'),
     outputDir: join(process.cwd(), 'reports')
   });

@@ -151,6 +151,33 @@ cd salesforce-metadata-analyzer
 
 ## Usage
 
+### Configuration
+
+You can specify the target path for analysis in multiple ways, with the following priority order:
+
+1. **Command-line argument** (highest priority)
+2. **Config file** (`sf-remediator.config.json`)
+3. **Current directory** (default fallback)
+
+#### Using Config File
+
+Create a `sf-remediator.config.json` file in your project root:
+
+```json
+{
+  "targetPath": "./force-app/main/default/classes",
+  "description": "Configuration file for sf-code-remediator. Specify the targetPath relative to the repository root."
+}
+```
+
+The `targetPath` can be:
+- **Relative path**: Resolved relative to the current working directory (e.g., `"./src/classes"`, `"../other-project/classes"`)
+- **Absolute path**: Used as-is (e.g., `"/full/path/to/classes"`)
+
+When using `npm run scan`, the tool will automatically read from this config file if it exists.
+
+**Note**: The config file path is resolved relative to where you run the command from (current working directory), not relative to the repository root.
+
 ### Basic Scan (Detection Only)
 
 Scan Salesforce metadata without making any changes:
@@ -175,6 +202,8 @@ node src/index.js --fix
 
 ### Scan Specific Directory
 
+Using command-line argument:
+
 ```bash
 node src/index.js --path /path/to/salesforce/metadata --autoFix
 ```
@@ -184,6 +213,9 @@ node src/index.js --path /path/to/salesforce/metadata --autoFix
 ```bash
 # Scan only
 npm run scan
+
+# Scan with specific path
+npm run scan -- --path ./path/to/metadata
 
 # Scan with auto-fix
 npm run fix
