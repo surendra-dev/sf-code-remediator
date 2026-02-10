@@ -1,0 +1,29 @@
+{
+  "name": "salesforce-metadata-analyzer",
+  "version": "1.0.0",
+  "description": "Node.js-based static analysis and remediation workflow for Salesforce metadata",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "scan": "node src/index.js --scan",
+    "fix": "node src/index.js --autoFix"
+  },
+  "keywords": [
+    "salesforce",
+    "apex",
+    "static-analysis",
+    "code-quality",
+    "security"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "bin": {
+    "sf-analyzer": "./src/index.js"
+  }
+}
