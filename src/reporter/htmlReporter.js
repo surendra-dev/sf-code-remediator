@@ -51,7 +51,6 @@ export class HtmlReporter {
   }
 
   getStyles() {
-  getStyles() {
     return `<style>
         /* Priority-specific styles */
         .priority-banner {
@@ -161,6 +160,7 @@ export class HtmlReporter {
         }
         .empty-icon { font-size: 3em; margin-bottom: 10px; }
 
+        * {
         /* Base styles */
             margin: 0;
             padding: 0;
