@@ -8,6 +8,25 @@ import { WhitespaceFix } from './fixStrategies/whitespaceFix.js';
 export class ApexFixer {
   constructor(targetPath) {
     this.targetPath = targetPath;
+    
+    // Tier 3 (Cleanup) rules that can be auto-fixed
+    // Tier 1 and Tier 2 should NEVER be auto-fixed
+    this.tier3Rules = new Set([
+      'NoTrailingWhitespace',
+      'AvoidDebugStatements',
+      'MissingApexDoc',
+      'UnusedVariable'
+    ]);
+    
+    // Tier 1 and Tier 2 rules that should NEVER be auto-fixed
+    this.nonAutoFixableRules = new Set([
+      'ApexCRUDViolation',
+      'ApexSharingViolation',
+      'ApexSOQLInjection',
+      'CognitiveComplexity',
+      'OperationWithLimitsInLoop'
+    ]);
+    
     this.fixStrategies = {
       'ApexCRUDViolation': new CRUDFix(),
       'ApexSharingViolation': new SharingFix(),
@@ -34,6 +53,13 @@ export class ApexFixer {
         
         for (const violation of sortedViolations) {
           if (!violation.autoFixable) {
+            continue;
+          }
+          
+          // IMPORTANT: Only auto-fix Tier 3 (Cleanup) issues
+          // Never auto-fix Tier 1 (Critical) or Tier 2 (Important)
+          if (this.nonAutoFixableRules.has(violation.rule)) {
+            console.warn(`Skipping auto-fix for ${violation.rule} (requires manual review)`);
             continue;
           }
           
