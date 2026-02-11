@@ -1,4 +1,5 @@
 {
   "targetPath": "../iseeit-sfdx/iseeit/main/default/classes",
+  "includeTestClasses": false,
   "description": "Configuration file for sf-code-remediator. Specify the targetPath relative to the repository root."
 }

@@ -188,6 +188,14 @@ export class HtmlReporter {
             margin-left: 10px;
         }
         .empty-icon { font-size: 3em; margin-bottom: 10px; }
+        .test-code-label {
+            background: #9c27b0;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 0.85em;
+            margin-left: 10px;
+        }
 
         * {
         /* Base styles */
@@ -550,9 +558,15 @@ export class HtmlReporter {
     const violationsHtml = notFixed.map(v => {
       const reason = v.autoFixable ? 'Fix failed or was skipped' : 'Requires manual review and context';
       return `<div class="violation-item ${v.severity.toLowerCase()}">
+      const testLabel = v.isTestCode ? `<span class="test-code-label">🧪 Test Code (Not Auto-Fixed)</span>` : '';
+      const actualReason = v.isTestCode ? 'Test code is never auto-fixed' : reason;
+      
           <div class="violation-header">
               <span class="violation-rule">${v.rule}</span>
-              <span class="severity-badge ${v.severity.toLowerCase()}">${v.severity}</span>
+              <div>
+                  <span class="violation-rule">${v.rule}</span>
+                  ${testLabel}
+              </div>
           </div>
           <div class="violation-details">
               <p><strong>File:</strong> ${v.filePath}</p>
@@ -561,7 +575,7 @@ export class HtmlReporter {
           </div>
           <div class="manual-action">
               <strong>⚠ Reason:</strong> ${reason}<br>
-              <strong>Recommended Action:</strong> ${this.getRecommendedAction(v.rule)}
+              <strong>⚠ Reason:</strong> ${actualReason}<br>
           </div>
       </div>`;
     }).join('');
@@ -757,9 +771,12 @@ export class HtmlReporter {
       for (const violation of fileData.violations.slice(0, 3)) {
         const key = `${violation.rule}-${violation.filePath}-${violation.line}`;
         const isFixed = fixedMap.has(key);
+        const isTest = violation.isTestCode;
         const isFailed = failedMap.has(key);
         
         const statusLabel = isFixed 
+          : isTest
+          ? `<span class="fixed-label" style="background: #9c27b0;">🧪 Test Code (Not Auto-Fixed)</span>`
           ? `<span class="fixed-label">✅ Auto-Fixed: ${fixedMap.get(key)}</span>`
           : isFailed
           ? `<span class="fixed-label" style="background: #ff9800;">❌ ${failedMap.get(key)}</span>`
