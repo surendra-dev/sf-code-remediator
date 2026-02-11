@@ -141,8 +141,7 @@ export class Prioritizer {
 
   /**
    * Group violations by rule and file
-   */
-   * Each rule+file combination = ONE finding with N occurrences
+   * Each rule+file combination = ONE finding with N occurrences*/
   groupViolations(violations) {
     const byRule = {};
 
