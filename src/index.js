@@ -16,18 +16,23 @@ class SalesforceAnalyzer {
   constructor(options = {}) {
     this.targetPath = options.targetPath || process.cwd();
     this.autoFix = options.autoFix || false;
+    this.includeTestClasses = options.includeTestClasses !== undefined ? options.includeTestClasses : false;
     this.outputDir = options.outputDir || join(process.cwd(), 'reports');
   }
 
   async run() {
     this.printHeader();
 
-    const scanner = new ApexScanner(this.targetPath);
+    const scanner = new ApexScanner(this.targetPath, {
+      includeTestClasses: this.includeTestClasses
+    });
     const scanResults = await scanner.scan();
     
     // Prioritize results to make them actionable
     const prioritizer = new Prioritizer();
     const prioritizedResults = prioritizer.prioritize(scanResults);
+    
+    this.printTestClassInfo(scanResults);
     
     this.printScanResults(scanResults);
     this.printPriorityBreakdown(prioritizedResults);
@@ -107,6 +112,7 @@ class SalesforceAnalyzer {
     console.log('Salesforce Metadata Analyzer');
     console.log('=' .repeat(60));
     console.log(`Path: ${this.targetPath}`);
+    console.log(`Include Test Classes: ${this.includeTestClasses}`);
     console.log(`Auto-fix: ${this.autoFix}`);
     console.log('=' .repeat(60));
   }
@@ -114,6 +120,17 @@ class SalesforceAnalyzer {
   printScanResults(results) {
     console.log(`\nScanned: ${results.filesScanned} files`);
     console.log(`Violations: ${results.totalViolations}`);
+  
+  printTestClassInfo(results) {
+    const testViolations = results.violations.filter(v => v.isTestCode);
+    if (testViolations.length > 0) {
+      console.log(`\nTest Classes: ${testViolations.length} violations found (scan-only, not auto-fixed)`);
+    } else if (this.includeTestClasses) {
+      console.log(`\nTest Classes: Included in scan, no violations found`);
+    } else {
+      console.log(`\nTest Classes: Skipped (use --includeTestClasses to scan)`);
+    }
+  }
   }
 
   printPriorityBreakdown(prioritizedResults) {
@@ -233,11 +250,48 @@ function resolveTargetPath(args) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
+/**
+ * Resolves configuration options from CLI arguments and config file.
+ * CLI arguments take priority over config file.
+ * 
+ * @param {string[]} args - Command-line arguments
+ * @returns {object} Configuration object
+ */
+function resolveConfig(args) {
+  const config = {
+    includeTestClasses: false
+  };
+  
+  // Load from config file first
+  const configPath = join(process.cwd(), 'sf-remediator.config.json');
+  if (existsSync(configPath)) {
+    try {
+      const configContent = readFileSync(configPath, 'utf-8');
+      const fileConfig = JSON.parse(configContent);
+      if (fileConfig.includeTestClasses !== undefined) {
+        config.includeTestClasses = fileConfig.includeTestClasses;
+      }
+    } catch (error) {
+      // Config file parsing errors are already handled in resolveTargetPath
+    }
+  }
+  
+  // CLI arguments override config file
+  if (args.includes('--includeTestClasses')) {
+    config.includeTestClasses = true;
+  }
+  
+  return config;
+}
+
   const args = process.argv.slice(2);
   const analyzer = new SalesforceAnalyzer({
+  const config = resolveConfig(args);
+  
     targetPath: resolveTargetPath(args),
     autoFix: args.includes('--autoFix') || args.includes('--fix'),
     outputDir: join(process.cwd(), 'reports')
+    includeTestClasses: config.includeTestClasses,
   });
 
   analyzer.run().catch(err => console.error('Error:', err));

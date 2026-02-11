@@ -8,8 +8,9 @@ import { ApexSOQLInjectionRule } from './rules/apexSOQLInjection.js';
 import { CognitiveComplexityRule } from './rules/cognitiveComplexity.js';
 
 export class ApexScanner {
-  constructor(targetPath) {
+  constructor(targetPath, options = {}) {
     this.targetPath = targetPath;
+    this.includeTestClasses = options.includeTestClasses !== undefined ? options.includeTestClasses : false;
     this.rules = [
       new ApexCRUDViolationRule(),
       new ApexSharingViolationRule(),
@@ -20,6 +21,28 @@ export class ApexScanner {
     ];
   }
 
+  /**
+   * Determines if a file is a test class based on:
+   * 1. @IsTest annotation in content
+   * 2. Filename containing 'Test'
+   */
+  isTestClass(filePath, content) {
+    // Check if filename contains 'Test'
+    const fileName = filePath.split('/').pop().split('\\').pop();
+    if (fileName.toLowerCase().includes('test')) {
+      return true;
+    }
+    
+    // Check if content contains @IsTest annotation
+    // Match @isTest or @IsTest with optional whitespace and parameters
+    const testAnnotationPattern = /@istest(\s*\(.*?\))?/i;
+    if (testAnnotationPattern.test(content)) {
+      return true;
+    }
+    
+    return false;
+  }
+
   async scan() {
     const apexFiles = await this.findApexFiles(this.targetPath);
     const violations = [];
@@ -27,6 +50,15 @@ export class ApexScanner {
 
     for (const filePath of apexFiles) {
       const content = await readFile(filePath, 'utf-8');
+      
+      // Check if this is a test class
+      const isTest = this.isTestClass(filePath, content);
+      
+      // Skip test classes if not configured to include them
+      if (isTest && !this.includeTestClasses) {
+        continue;
+      }
+      
       const fileViolationsList = await this.scanFile(filePath, content);
       
       violations.push(...fileViolationsList);
@@ -48,10 +80,21 @@ export class ApexScanner {
   }
 
   async scanFile(filePath, content) {
+    const isTest = this.isTestClass(filePath, content);
     const violations = [];
 
     for (const rule of this.rules) {
       const ruleViolations = await rule.check(filePath, content);
+      
+      // Mark violations from test classes
+      if (isTest) {
+        for (const violation of ruleViolations) {
+          violation.isTestCode = true;
+          // Test code should never be auto-fixed
+          violation.autoFixable = false;
+        }
+      }
+      
       violations.push(...ruleViolations);
     }
 

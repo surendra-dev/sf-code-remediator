@@ -60,6 +60,12 @@ export class ApexFixer {
             continue;
           }
           
+          // Never auto-fix test class violations
+          if (violation.isTestCode) {
+            failed.push({ violation, reason: 'Test code is not auto-fixed' });
+            continue;
+          }
+          
           // Skip rules that should never be auto-fixed
           if (this.nonAutoFixableRules.has(violation.rule)) {
             failed.push({ violation, reason: 'Rule not eligible for auto-fix' });
