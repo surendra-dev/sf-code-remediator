@@ -1,7 +1,9 @@
 /**
  * Prioritization layer for scan results
- * Transforms 12,000 noisy issues into actionable, prioritized results
+ * Transforms noisy raw occurrences into actionable, prioritized findings
  * 
+ * PHILOSOPHY: Root-cause aggregation (Salesforce Security Scanner style)
+ * - One rule per file = ONE finding (with N occurrences)
  * THREE TIERS:
  * - Tier 1 (CRITICAL): Security & data access - Fix First
  * - Tier 2 (IMPORTANT): Performance & stability - Plan Fix
@@ -66,17 +68,18 @@ export class Prioritizer {
   }
 
   /**
-   * Prioritize and group violations to reduce noise
+   * Prioritize and group violations using root-cause aggregation
+   * Key: One rule per file = ONE finding (with N occurrences tracked)
    * @param {Object} scanResults - Raw scan results
    * @returns {Object} Prioritized results with grouping and context
    */
   prioritize(scanResults) {
     const violations = scanResults.violations || [];
     
-    // Classify violations by tier
+    // Step 1: Classify violations by tier
     const tierClassified = this.classifyByTier(violations);
     
-    // Group and deduplicate within each tier
+    // Step 2: Group by rule+file (root-cause aggregation)
     const groupedByTier = this.groupWithinTiers(tierClassified);
     
     // Calculate summary statistics
@@ -139,6 +142,7 @@ export class Prioritizer {
   /**
    * Group violations by rule and file
    */
+   * Each rule+file combination = ONE finding with N occurrences
   groupViolations(violations) {
     const byRule = {};
 
@@ -151,7 +155,8 @@ export class Prioritizer {
           severity: violation.severity,
           autoFixable: violation.autoFixable,
           count: 0,
-          files: {},
+          fileCount: 0,
+          files: {}, // Detailed breakdown by file
           instances: []
         };
       }
@@ -162,7 +167,7 @@ export class Prioritizer {
       const filePath = violation.filePath;
       if (!byRule[rule].files[filePath]) {
         byRule[rule].files[filePath] = {
-          filePath,
+          filePath: filePath,
           count: 0,
           violations: []
         };
@@ -176,44 +181,63 @@ export class Prioritizer {
         byRule[rule].instances.push(violation);
       }
     }
+    
+    // Calculate file counts for each rule
+    for (const rule in byRule) {
+      byRule[rule].fileCount = Object.keys(byRule[rule].files).length;
+    }
 
     return byRule;
   }
 
   /**
    * Calculate summary statistics
+   * CRITICAL: Count FINDINGS (rule+file pairs), not raw occurrences
+   * This aligns with Salesforce Security Scanner philosophy
    */
   calculateSummary(groupedByTier) {
     const summary = {
-      critical: 0,
-      important: 0,
-      cleanup: 0,
-      total: 0,
+      // Findings = number of rule+file combinations
+      criticalFindings: 0,
+      importantFindings: 0,
+      cleanupFindings: 0,
+      totalFindings: 0,
+      
+      // Occurrences = raw violation count (for reference)
+      criticalOccurrences: 0,
+      importantOccurrences: 0,
+      cleanupOccurrences: 0,
+      totalOccurrences: 0,
+      
+      // Rule-level breakdown
       criticalRules: [],
       importantRules: [],
       cleanupRules: []
     };
 
     for (const [tierKey, ruleGroups] of Object.entries(groupedByTier)) {
-      const tierDef = this.tierDefinitions[tierKey];
-      
       for (const [rule, group] of Object.entries(ruleGroups)) {
-        const count = group.count;
+        const occurrenceCount = group.count;
+        const findingCount = group.fileCount; // One finding per file for this rule
         
         if (tierKey === 'TIER1_CRITICAL') {
-          summary.critical += count;
-          summary.criticalRules.push({ rule, count });
+          summary.criticalFindings += findingCount;
+          summary.criticalOccurrences += occurrenceCount;
+          summary.criticalRules.push({ rule, findings: findingCount, occurrences: occurrenceCount });
         } else if (tierKey === 'TIER2_IMPORTANT') {
-          summary.important += count;
-          summary.importantRules.push({ rule, count });
+          summary.importantFindings += findingCount;
+          summary.importantOccurrences += occurrenceCount;
+          summary.importantRules.push({ rule, findings: findingCount, occurrences: occurrenceCount });
         } else if (tierKey === 'TIER3_CLEANUP') {
-          summary.cleanup += count;
-          summary.cleanupRules.push({ rule, count });
+          summary.cleanupFindings += findingCount;
+          summary.cleanupOccurrences += occurrenceCount;
+          summary.cleanupRules.push({ rule, findings: findingCount, occurrences: occurrenceCount });
         }
-        
-        summary.total += count;
       }
     }
+    
+    summary.totalFindings = summary.criticalFindings + summary.importantFindings + summary.cleanupFindings;
+    summary.totalOccurrences = summary.criticalOccurrences + summary.importantOccurrences + summary.cleanupOccurrences;
 
     return summary;
   }
