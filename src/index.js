@@ -121,8 +121,10 @@ class SalesforceAnalyzer {
     console.log(`\nScanned: ${results.filesScanned} files`);
     console.log(`Violations: ${results.totalViolations}`);
   
-  printTestClassInfo(results) {
+
     const testViolations = results.violations.filter(v => v.isTestCode);
+    const testViolations = results.violations.filter(v => v.isTestCode);
+    if (testViolations.length > 0) {
     if (testViolations.length > 0) {
       console.log(`\nTest Classes: ${testViolations.length} violations found (scan-only, not auto-fixed)`);
     } else if (this.includeTestClasses) {
@@ -130,8 +132,8 @@ class SalesforceAnalyzer {
     } else {
       console.log(`\nTest Classes: Skipped (use --includeTestClasses to scan)`);
     }
-  }
-  }
+
+  printPriorityBreakdown(prioritizedResults) {
 
   printPriorityBreakdown(prioritizedResults) {
     const summary = prioritizedResults.summary;
@@ -247,7 +249,6 @@ function resolveTargetPath(args) {
 
   // Priority 3: Default fallback
   return process.cwd();
-}
 
 if (import.meta.url === `file://${process.argv[1]}`) {
 /**
@@ -282,20 +283,20 @@ function resolveConfig(args) {
   }
   
   return config;
+if (import.meta.url === `file://${process.argv[1]}`) {
 }
-
-  const args = process.argv.slice(2);
-  const analyzer = new SalesforceAnalyzer({
   const config = resolveConfig(args);
   
+
+  const config = resolveConfig(args);
+  
+    includeTestClasses: config.includeTestClasses,
     targetPath: resolveTargetPath(args),
-    autoFix: args.includes('--autoFix') || args.includes('--fix'),
     outputDir: join(process.cwd(), 'reports')
     includeTestClasses: config.includeTestClasses,
   });
 
   analyzer.run().catch(err => console.error('Error:', err));
 }
-
 export { SalesforceAnalyzer };
 
