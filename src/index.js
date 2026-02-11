@@ -7,6 +7,7 @@ import { ApexScanner } from './scanner/apexScanner.js';
 import { ApexFixer } from './fixer/apexFixer.js';
 import { Verifier } from './verifier/verifier.js';
 import { HtmlReporter } from './reporter/htmlReporter.js';
+import { Prioritizer } from './scanner/prioritizer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -24,9 +25,15 @@ class SalesforceAnalyzer {
     const scanner = new ApexScanner(this.targetPath);
     const scanResults = await scanner.scan();
     
-    this.printScanResults(scanResults);
+    // Prioritize results to make them actionable
+    const prioritizer = new Prioritizer();
+    const prioritizedResults = prioritizer.prioritize(scanResults);
     
-    const autoFixable = scanResults.violations.filter(v => v.autoFixable);
+    this.printScanResults(scanResults);
+    this.printPriorityBreakdown(prioritizedResults);
+    
+    // Only allow auto-fix for Tier 3 (Cleanup) issues
+    const autoFixable = this.getAutoFixableViolations(prioritizedResults);
     const notAutoFixable = scanResults.violations.filter(v => !v.autoFixable);
     
     console.log(`\nClassification: ${autoFixable.length} auto-fixable, ${notAutoFixable.length} manual`);
@@ -59,6 +66,7 @@ class SalesforceAnalyzer {
     console.log('\nGenerating report...');
     const reporter = new HtmlReporter(this.outputDir);
     const reportPath = await reporter.generate({
+      prioritizedResults,
       scanResults,
       fixResults,
       verificationResults,
@@ -89,6 +97,43 @@ class SalesforceAnalyzer {
   printScanResults(results) {
     console.log(`\nScanned: ${results.filesScanned} files`);
     console.log(`Violations: ${results.totalViolations}`);
+  }
+
+  printPriorityBreakdown(prioritizedResults) {
+    const summary = prioritizedResults.summary;
+    
+    console.log('\n' + '=' .repeat(60));
+    console.log('PRIORITY BREAKDOWN');
+    console.log('=' .repeat(60));
+    console.log(`🚨 Critical (Fix First):     ${summary.critical}`);
+    console.log(`⚠️  Important (Plan Fix):    ${summary.important}`);
+    console.log(`🧹 Cleanup (Auto-Fixable):   ${summary.cleanup}`);
+    console.log('=' .repeat(60));
+    
+    if (summary.critical > 0) {
+      console.log('\nCritical issues detected:');
+      for (const { rule, count } of summary.criticalRules) {
+        console.log(`  - ${rule}: ${count}`);
+      }
+    }
+  }
+
+  /**
+   * Get auto-fixable violations (only Tier 3)
+   */
+  getAutoFixableViolations(prioritizedResults) {
+    const tier3 = prioritizedResults.tiers.TIER3_CLEANUP;
+    const autoFixable = [];
+    
+    if (tier3 && tier3.ruleGroups) {
+      for (const [rule, group] of Object.entries(tier3.ruleGroups)) {
+        for (const [filePath, fileGroup] of Object.entries(group.files)) {
+          autoFixable.push(...fileGroup.violations.filter(v => v.autoFixable));
+        }
+      }
+    }
+    
+    return autoFixable;
   }
 
   printSummary(scanResults, fixResults, reportPath) {
