@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { PriorityRenderer } from './priorityRenderer.js';
+import { SalesforceQueryRenderer } from './salesforceQueryRenderer.js';
 
 export class HtmlReporter {
   constructor(outputDir) {
@@ -10,7 +11,19 @@ export class HtmlReporter {
   async generate(data) {
     await mkdir(this.outputDir, { recursive: true });
 
-    const html = this.buildHtml(data);
+    // Use Salesforce-style report format (matching reference specification)
+    const useSalesforceFormat = true;
+    
+    let html;
+    if (useSalesforceFormat) {
+      const sfRenderer = new SalesforceQueryRenderer();
+      const report = sfRenderer.renderReport(data.scanResults, data.prioritizedResults);
+      html = report.html;
+    } else {
+      // Fallback to original format
+      html = this.buildHtml(data);
+    }
+    
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `salesforce-analysis-${timestamp}.html`;
     const reportPath = join(this.outputDir, filename);

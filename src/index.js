@@ -110,10 +110,10 @@ class SalesforceAnalyzer {
     console.log(`🧹 Cleanup (Auto-Fixable):   ${summary.cleanup}`);
     console.log('=' .repeat(60));
     
-    if (summary.critical > 0) {
+    if (summary.criticalFindings > 0) {
       console.log('\nCritical issues detected:');
-      for (const { rule, count } of summary.criticalRules) {
-        console.log(`  - ${rule}: ${count}`);
+      for (const { rule, findings, occurrences } of summary.criticalRules) {
+        console.log(`  - ${rule}: ${findings} findings (${occurrences} occurrences)`);
       }
     }
   }
