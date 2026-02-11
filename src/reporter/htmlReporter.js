@@ -429,8 +429,8 @@ export class HtmlReporter {
 
   buildHeader() {
     return `<div class="header">
-        <h1>🔍 Salesforce Code Analysis Report</h1>
-        <p>Generated on ${new Date().toLocaleString()}</p>
+        <h1>🔍 Salesforce Security Review</h1>
+        <p>Static Analysis Report • Generated on ${new Date().toLocaleString()}</p>
     </div>`;
   }
 

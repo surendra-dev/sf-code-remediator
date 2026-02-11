@@ -1,6 +1,11 @@
 /**
  * Priority-based HTML rendering for scan results
- * Transforms prioritized results into actionable HTML sections
+ * 
+ * PHILOSOPHY: Salesforce Security Scanner style
+ * - Report FINDINGS (rule+file pairs), not raw occurrences
+ * - Severity is rule-driven, NOT count-driven
+ * - Occurrences are metadata, not separate "issues"
+ * - Show: Why this matters + Recommended action + Sample locations
  */
 
 export class PriorityRenderer {
@@ -8,31 +13,35 @@ export class PriorityRenderer {
   renderSummaryBanner(prioritizedResults) {
     const summary = prioritizedResults.summary;
     
+    // Display findings prominently, occurrences as context
     return `
       <div class="priority-banner">
         <h2 class="banner-title">Priority Summary</h2>
-        <p class="banner-subtitle">What should I fix FIRST, and why?</p>
+        <p class="banner-subtitle">Security Review Summary - ${summary.totalFindings} finding(s) from ${summary.totalOccurrences} occurrence(s)</p>
         
         <div class="priority-cards">
           <div class="pcard critical-card">
-            <div class="card-icon">CRITICAL</div>
-            <div class="card-number">${summary.critical}</div>
+            <div class="card-icon">🚨</div>
+            <div class="card-number">${summary.criticalFindings}</div>
             <div class="card-label">Critical - Fix First</div>
-            <div class="card-info">Security and data access risks</div>
+            <div class="card-info">Security & data access violations</div>
+            <div class="card-info" style="font-size: 0.85em; opacity: 0.8;">${summary.criticalOccurrences} occurrence(s)</div>
           </div>
           
           <div class="pcard important-card">
-            <div class="card-icon">IMPORTANT</div>
-            <div class="card-number">${summary.important}</div>
+            <div class="card-icon">⚠️</div>
+            <div class="card-number">${summary.importantFindings}</div>
             <div class="card-label">Important - Plan Fix</div>
-            <div class="card-info">Performance and stability risks</div>
+            <div class="card-info">Performance & maintainability risks</div>
+            <div class="card-info" style="font-size: 0.85em; opacity: 0.8;">${summary.importantOccurrences} occurrence(s)</div>
           </div>
           
           <div class="pcard cleanup-card">
-            <div class="card-icon">CLEANUP</div>
-            <div class="card-number">${summary.cleanup}</div>
+            <div class="card-icon">🧹</div>
+            <div class="card-number">${summary.cleanupFindings}</div>
             <div class="card-label">Cleanup - Auto-Fixable</div>
-            <div class="card-info">Style and hygiene issues</div>
+            <div class="card-info">Code hygiene & style</div>
+            <div class="card-info" style="font-size: 0.85em; opacity: 0.8;">${summary.cleanupOccurrences} occurrence(s)</div>
           </div>
         </div>
       </div>
@@ -67,7 +76,8 @@ export class PriorityRenderer {
     const tierInfo = tierData.tier;
     const ruleGroups = tierData.ruleGroups;
     
-    const sortedRules = Object.entries(ruleGroups).sort((a, b) => b[1].count - a[1].count);
+    // Sort by file count (findings), not raw occurrences
+    const sortedRules = Object.entries(ruleGroups).sort((a, b) => b[1].fileCount - a[1].fileCount);
     const rulesHtml = sortedRules.map(([ruleName, group]) => 
       this.renderRuleGroup(ruleName, group, className, fixResults)
     ).join('');
@@ -88,15 +98,19 @@ export class PriorityRenderer {
   }
 
   renderRuleGroup(ruleName, group, tierClass, fixResults) {
-    const fileCount = Object.keys(group.files).length;
-    const shouldSummarize = tierClass === 'cleanup' && group.count > 20;
+    const fileCount = group.fileCount;
+    const occurrenceCount = group.count;
+    
+    // Aggressive noise reduction for cleanup rules
+    const shouldSummarize = tierClass === 'cleanup' && occurrenceCount > 10;
     
     let violationsContent = '';
     
     if (shouldSummarize) {
       violationsContent = this.renderFileSummary(group.files);
     } else {
-      violationsContent = this.renderIndividualViolations(group.instances, group.count, fixResults);
+      // For security/important issues, show sample violations
+      violationsContent = this.renderIndividualViolations(group.instances, occurrenceCount, fixResults);
     }
 
     return `
@@ -106,14 +120,22 @@ export class PriorityRenderer {
             <div class="rule-title">${ruleName}</div>
             <div class="rule-meta">
               <span class="severity-badge ${group.severity.toLowerCase()}">${group.severity}</span>
-              <span class="occurrence-info">${group.count} occurrence(s) in ${fileCount} file(s)</span>
+              <span class="occurrence-info">
+                ${fileCount} file(s) affected • ${occurrenceCount} occurrence(s) total
+              </span>
             </div>
           </div>
-          <div class="rule-total">${group.count}</div>
+          <div class="rule-total">
+            <div style="font-size: 0.5em; color: #95a5a6; text-transform: uppercase;">Findings</div>
+            <div>${fileCount}</div>
+          </div>
         </div>
         
         <div class="remediation-box">
-          <strong>Recommended Action:</strong> ${group.remediation}
+          <strong>🔧 Recommended Action:</strong> ${group.remediation}
+          <div style="margin-top: 8px; font-size: 0.9em; color: #6c757d;">
+            <strong>Impact:</strong> This rule has been detected in ${fileCount} file(s) with ${occurrenceCount} total occurrence(s).
+          </div>
         </div>
         
         ${violationsContent}
@@ -122,18 +144,19 @@ export class PriorityRenderer {
   }
 
   renderFileSummary(files) {
+    // For cleanup rules: show top affected files only
     const sortedFiles = Object.entries(files).sort((a, b) => b[1].count - a[1].count);
-    const topFiles = sortedFiles.slice(0, 10);
-    const remaining = sortedFiles.length - 10;
+    const displayLimit = 8;
+    const topFiles = sortedFiles.slice(0, displayLimit);
+    const remaining = sortedFiles.length - displayLimit;
     
     const fileItems = topFiles.map(([filePath, fileData]) => {
-      const fileName = filePath.split('/').pop();
-      return `<li><strong>${fileName}</strong>: ${fileData.count} occurrence(s)</li>`;
+      return `<li><strong>${filePath}</strong>: ${fileData.count} occurrence(s)</li>`;
     }).join('');
     
     return `
       <div class="file-summary-box">
-        <p class="summary-heading"><strong>Top affected files:</strong></p>
+        <p class="summary-heading"><strong>📁 Top affected files (cleanup recommended):</strong></p>
         <ul class="file-list">${fileItems}</ul>
         ${remaining > 0 ? `<p class="more-files">...and ${remaining} more file(s)</p>` : ''}
       </div>
@@ -141,7 +164,9 @@ export class PriorityRenderer {
   }
 
   renderIndividualViolations(instances, totalCount, fixResults) {
-    const displayCount = Math.min(instances.length, 5);
+    // Show sample locations (limited)
+    const displayLimit = 3;
+    const displayCount = Math.min(instances.length, displayLimit);
     const shown = instances.slice(0, displayCount);
     
     const violationItems = shown.map(violation => 
@@ -150,7 +175,7 @@ export class PriorityRenderer {
     
     const remainder = totalCount - displayCount;
     const moreText = remainder > 0 ? 
-      `<div class="more-violations">...and ${remainder} more occurrence(s)</div>` : '';
+      `<div class="more-violations">...and ${remainder} more occurrence(s) in this file group</div>` : '';
     
     return violationItems + moreText;
   }
@@ -166,14 +191,13 @@ export class PriorityRenderer {
     const fixedLabel = wasFixed ? 
       '<span class="fixed-label">FIXED</span>' : '';
     
-    const fileName = violation.filePath.split('/').pop();
     const codeSnippet = violation.context?.lineContent ? 
       `<div class="code-snippet">${this.escapeHtml(violation.context.lineContent)}</div>` : '';
 
     return `
       <div class="violation-item ${violation.severity.toLowerCase()} ${fixedClass}">
         <div class="violation-details">
-          <p><strong>File:</strong> ${fileName} ${fixedLabel}</p>
+          <p><strong>📄 File:</strong> ${violation.filePath} ${fixedLabel}</p>
           <p><strong>Location:</strong> <span class="violation-location">Line ${violation.line}, Column ${violation.column}</span></p>
           <p><strong>Description:</strong> ${violation.description}</p>
           ${codeSnippet}
