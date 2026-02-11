@@ -9,8 +9,7 @@ export class ApexFixer {
   constructor(targetPath) {
     this.targetPath = targetPath;
     
-    // Tier 3 (Cleanup) rules that can be auto-fixed
-    // Tier 1 and Tier 2 should NEVER be auto-fixed
+    // Tier 3 (Cleanup) rules - always auto-fixable
     this.tier3Rules = new Set([
       'NoTrailingWhitespace',
       'AvoidDebugStatements',
@@ -18,10 +17,15 @@ export class ApexFixer {
       'UnusedVariable'
     ]);
     
-    // Tier 1 and Tier 2 rules that should NEVER be auto-fixed
-    this.nonAutoFixableRules = new Set([
+    // Auto-safe and auto-guarded rules (Tier 1)
+    // These can be auto-fixed under specific conditions
+    this.conditionallyFixableRules = new Set([
       'ApexCRUDViolation',
-      'ApexSharingViolation',
+      'ApexSharingViolation'
+    ]);
+    
+    // Rules that should NEVER be auto-fixed
+    this.nonAutoFixableRules = new Set([
       'ApexSOQLInjection',
       'CognitiveComplexity',
       'OperationWithLimitsInLoop'
@@ -56,10 +60,9 @@ export class ApexFixer {
             continue;
           }
           
-          // IMPORTANT: Only auto-fix Tier 3 (Cleanup) issues
-          // Never auto-fix Tier 1 (Critical) or Tier 2 (Important)
+          // Skip rules that should never be auto-fixed
           if (this.nonAutoFixableRules.has(violation.rule)) {
-            console.warn(`Skipping auto-fix for ${violation.rule} (requires manual review)`);
+            failed.push({ violation, reason: 'Rule not eligible for auto-fix' });
             continue;
           }
           

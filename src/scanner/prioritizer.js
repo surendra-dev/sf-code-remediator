@@ -18,7 +18,7 @@ export class Prioritizer {
         name: 'Critical - Fix First',
         icon: '🚨',
         priority: 1,
-        autoFixAllowed: false,
+        autoFixAllowed: 'conditional',
         rules: [
           'ApexCRUDViolation',
           'ApexFLSViolation',
@@ -26,7 +26,7 @@ export class Prioritizer {
           'ApexSOQLInjection'
         ],
         description: 'Security and data-access risks that could expose sensitive data or bypass security controls',
-        guidance: 'These issues require careful manual review and context-aware fixes. Never auto-fix blindly.'
+        guidance: 'Auto-fixes applied where safe (WITH SECURITY_ENFORCED for SOQL, FLS checks for DML with clear sObject, with sharing for classes). Complex cases require manual review.'
       },
       TIER2_IMPORTANT: {
         name: 'Important - Plan Fix',
@@ -264,9 +264,9 @@ export class Prioritizer {
    */
   addRemediationGuidance(ruleGroups) {
     const guidance = {
-      'ApexCRUDViolation': 'Add CRUD/FLS checks before DML operations. Use Schema.sObjectType methods to verify permissions.',
+      'ApexCRUDViolation': 'SOQL: Add WITH SECURITY_ENFORCED. DML: Add Schema.sObjectType.isCreateable/isUpdateable/isDeletable checks.',
       'ApexSOQLInjection': 'Use bind variables or String.escapeSingleQuotes() to prevent SOQL injection attacks.',
-      'ApexSharingViolation': 'Add appropriate sharing keywords (with sharing, without sharing, inherited sharing) based on security requirements.',
+      'ApexSharingViolation': 'Add "with sharing" to class declaration to enforce user-level security.',
       'CognitiveComplexity': 'Refactor complex methods by extracting helper methods and reducing nested logic.',
       'NoTrailingWhitespace': 'Remove trailing whitespace characters from lines.',
       'AvoidDebugStatements': 'Remove System.debug() statements before deploying to production.'

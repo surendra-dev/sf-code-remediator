@@ -32,14 +32,14 @@ class SalesforceAnalyzer {
     this.printScanResults(scanResults);
     this.printPriorityBreakdown(prioritizedResults);
     
-    // Only allow auto-fix for Tier 3 (Cleanup) issues
+    // Get auto-fixable violations (Tier 3 + conditionally fixable Tier 1)
     const autoFixable = this.getAutoFixableViolations(prioritizedResults);
-    const notAutoFixable = scanResults.violations.filter(v => !v.autoFixable);
     
-    console.log(`\nClassification: ${autoFixable.length} auto-fixable, ${notAutoFixable.length} manual`);
+    console.log(`\nClassification: ${autoFixable.length} eligible for auto-fix`);
 
     let fixResults = { fixed: [], failed: [], updatedFiles: [] };
     let verificationResults = null;
+    let rescanResults = null;
 
     if (this.autoFix && autoFixable.length > 0) {
       console.log('\nApplying fixes...');
@@ -57,6 +57,13 @@ class SalesforceAnalyzer {
       if (verificationResults.rollbacks.length > 0) {
         console.log(`Rollbacks: ${verificationResults.rollbacks.length}`);
       }
+      
+      // Rescan modified files to get post-fix results
+      if (fixResults.updatedFiles.length > 0) {
+        console.log('\nRescanning modified files...');
+        rescanResults = await scanner.scan();
+        console.log(`Rescan complete: ${rescanResults.totalViolations} violations remaining`);
+      }
     } else if (this.autoFix) {
       console.log('\nNo fixable violations found');
     } else {
@@ -65,9 +72,18 @@ class SalesforceAnalyzer {
 
     console.log('\nGenerating report...');
     const reporter = new HtmlReporter(this.outputDir);
+    
+    // Use rescan results if available, otherwise use original
+    const finalResults = rescanResults || scanResults;
+    const finalPrioritized = rescanResults 
+      ? prioritizer.prioritize(rescanResults)
+      : prioritizedResults;
+    
     const reportPath = await reporter.generate({
-      prioritizedResults,
-      scanResults,
+      prioritizedResults: finalPrioritized,
+      scanResults: finalResults,
+      originalResults: scanResults,
+      originalPrioritized: prioritizedResults,
       fixResults,
       verificationResults,
       autoFixEnabled: this.autoFix
@@ -81,6 +97,7 @@ class SalesforceAnalyzer {
       scanResults,
       fixResults,
       verificationResults,
+      rescanResults,
       reportPath
     };
   }
@@ -119,12 +136,25 @@ class SalesforceAnalyzer {
   }
 
   /**
-   * Get auto-fixable violations (only Tier 3)
+   * Get auto-fixable violations (Tier 3 + conditionally fixable Tier 1)
    */
   getAutoFixableViolations(prioritizedResults) {
+    const tier1 = prioritizedResults.tiers.TIER1_CRITICAL;
     const tier3 = prioritizedResults.tiers.TIER3_CLEANUP;
     const autoFixable = [];
     
+    // Tier 1: Only conditionally fixable rules (CRUD, Sharing)
+    if (tier1 && tier1.ruleGroups) {
+      for (const [rule, group] of Object.entries(tier1.ruleGroups)) {
+        if (rule === 'ApexCRUDViolation' || rule === 'ApexSharingViolation') {
+          for (const [filePath, fileGroup] of Object.entries(group.files)) {
+            autoFixable.push(...fileGroup.violations.filter(v => v.autoFixable));
+          }
+        }
+      }
+    }
+    
+    // Tier 3: All violations are auto-fixable
     if (tier3 && tier3.ruleGroups) {
       for (const [rule, group] of Object.entries(tier3.ruleGroups)) {
         for (const [filePath, fileGroup] of Object.entries(group.files)) {
