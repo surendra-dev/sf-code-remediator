@@ -14,14 +14,35 @@ export class CRUDFix {
       const line = lines[lineIndex];
       const context = violation.context;
       
-      if (!context || !context.sobject) {
+      const opType = (context && context.operation) || this.detectOperation(line);
+      
+      // Handle SOQL queries with WITH SECURITY_ENFORCED (AUTO_SAFE)
+      if (opType === 'SOQL' || opType === 'read') {
+        if (/WITH\s+SECURITY_ENFORCED/i.test(line)) {
+          return { success: false, reason: 'WITH SECURITY_ENFORCED already present' };
+        }
+        
+        if (!/\[SELECT\s+.*?\]/i.test(line)) {
+          return { success: false, reason: 'Could not parse SOQL query' };
+        }
+        
+        lines[lineIndex] = line.replace(/\]/i, ' WITH SECURITY_ENFORCED]');
         return {
-          success: false,
-          reason: 'Cannot determine SObject type'
+          success: true,
+          content: lines.join('\n'),
+          description: 'Added WITH SECURITY_ENFORCED to SOQL query'
         };
       }
       
-      const operation = this.detectOperation(line);
+      // For DML, need sObject (AUTO_GUARDED)
+      if (!context || !context.sobject) {
+        return {
+          success: false,
+          reason: 'Cannot determine SObject type - manual fix required'
+        };
+      }
+      
+      const operation = opType;
       const checkCode = this.generateSecurityCheck(context.sobject, operation);
       
       if (!checkCode) {
@@ -55,7 +76,7 @@ export class CRUDFix {
     if (/\bupdate\b/i.test(line)) return 'update';
     if (/\bdelete\b/i.test(line)) return 'delete';
     if (/\bupsert\b/i.test(line)) return 'upsert';
-    if (/\[SELECT\b/i.test(line)) return 'read';
+    if (/\[SELECT\b/i.test(line)) return 'SOQL';
     return 'access';
   }
 
@@ -69,10 +90,8 @@ export class CRUDFix {
         return `if (!Schema.sObjectType.${sobject}.isDeletable()) {\n    throw new System.NoAccessException();\n}`;
       case 'upsert':
         return `if (!Schema.sObjectType.${sobject}.isCreateable() || !Schema.sObjectType.${sobject}.isUpdateable()) {\n    throw new System.NoAccessException();\n}`;
-      case 'read':
-        return `if (!Schema.sObjectType.${sobject}.isAccessible()) {\n    throw new System.NoAccessException();\n}`;
       default:
-        return `if (!Schema.sObjectType.${sobject}.isAccessible()) {\n    throw new System.NoAccessException();\n}`;
+        return null;
     }
   }
 

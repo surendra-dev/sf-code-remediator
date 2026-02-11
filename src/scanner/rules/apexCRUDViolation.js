@@ -16,6 +16,7 @@ export class ApexCRUDViolationRule {
     ];
 
     const securityCheckPatterns = [
+      /WITH\s+SECURITY_ENFORCED/i,
       /Schema\.sObjectType\.\w+\.fields\.\w+\.isAccessible\(\)/,
       /Schema\.sObjectType\.\w+\.fields\.\w+\.isCreateable\(\)/,
       /Schema\.sObjectType\.\w+\.fields\.\w+\.isUpdateable\(\)/,
@@ -38,6 +39,7 @@ export class ApexCRUDViolationRule {
           
           if (!hasSecurityCheck) {
             const sobject = this.extractSObject(line);
+            const specificOp = operation === 'DML' ? this.detectDMLOperation(line) : operation;
             
             violations.push({
               rule: this.name,
@@ -45,10 +47,10 @@ export class ApexCRUDViolationRule {
               filePath,
               line: lineNumber,
               column: match.index + 1,
-              description: `${operation} operation without CRUD/FLS check`,
-              autoFixable: this.autoFixable && sobject !== null,
+              description: `${specificOp} operation without CRUD/FLS check`,
+              autoFixable: operation === 'SOQL' || (this.autoFixable && sobject !== null),
               context: {
-                operation,
+                operation: specificOp,
                 sobject,
                 lineContent: line.trim()
               }
@@ -80,6 +82,14 @@ export class ApexCRUDViolationRule {
   extractSObject(line) {
     const match = line.match(/\b(insert|update|delete|upsert)\s+(\w+)/i);
     return match ? match[2] : null;
+  }
+
+  detectDMLOperation(line) {
+    if (/\binsert\b/i.test(line)) return 'insert';
+    if (/\bupdate\b/i.test(line)) return 'update';
+    if (/\bdelete\b/i.test(line)) return 'delete';
+    if (/\bupsert\b/i.test(line)) return 'upsert';
+    return 'DML';
   }
 }
 
